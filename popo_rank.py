@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Callable, Optional, Dict, List
 
 import pandas as pd
@@ -24,7 +23,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.core.utils import ChromeType
+
+# 兼容新舊版本的位置
+try:
+    from webdriver_manager.core.utils import ChromeType  # ≥3.8
+except ImportError:  # <3.8
+    from webdriver_manager.utils import ChromeType
 
 # -----------------------------------------------------------------------------
 # 共用工具
@@ -37,7 +41,7 @@ def _default_logger(msg: str) -> None:  # 預設直接 print
 def _create_driver() -> webdriver.Chrome:
     """建立 headless Chrome，雲端/本地皆可用。"""
     opts = Options()
-    opts.binary_location = "/usr/bin/chromium" # ★新增：雲端容器的 chromium 路徑
+    opts.binary_location = "/usr/bin/chromium"  # 雲端容器 chromium 路徑
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
@@ -48,6 +52,7 @@ def _create_driver() -> webdriver.Chrome:
         ),
         options=opts,
     )
+
 # -----------------------------------------------------------------------------
 # 解析單本書詳情
 # -----------------------------------------------------------------------------
@@ -204,7 +209,4 @@ def run_crawler(progress_callback: Optional[Callable[[str], None]] = None) -> st
 
 # -----------------------------------------------------------------------------
 # CLI 執行
-# -----------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    run_crawler()
+#

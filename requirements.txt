@@ -1,7 +1,7 @@
 streamlit==1.35.0
 pandas
 selenium
-webdriver-manager
+webdriver-manager>=3.8
 beautifulsoup4
 openpyxl
 lxml
