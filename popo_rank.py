@@ -1,10 +1,9 @@
 """
-POPO 排行榜爬蟲  ‑ 免 webdriver‑manager 版
+POPO 排行榜爬蟲  ‑ 自動偵測 Chromium 版
 ------------------------------------------------
-• 改用 **系統內建的 chromium‑driver**，完全不依賴 webdriver‑manager，
-  避免 import/版本不相容問題。
-• 仍保留 `progress_callback` 供 Streamlit 即時回報。
-• 其餘核心邏輯（切榜、解析、存檔）維持不變。
+• 改用系統 `chromium` + `chromium-driver`（packages.txt 安裝）。
+• 自動偵測可用的 Chromium 執行檔路徑，避免 NoSuchDriverException。
+• 保留 `progress_callback` 即時回報給 Streamlit UI。
 """
 
 from __future__ import annotations
@@ -23,30 +22,45 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-# Debian 11 (bullseye) 安裝 chromium-driver 後的預設路徑
-CHROMEDRIVER_PATH = "/usr/lib/chromium/chromedriver"
-CHROMIUM_BINARY = "/usr/bin/chromium"
+# -----------------------------------------------------------------------------
+# 系統安裝的 Chromium 路徑候選
+# -----------------------------------------------------------------------------
+CHROME_CANDIDATES: List[str] = [
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/usr/lib/chromium/chromium",
+]
+CHROMEDRIVER_PATH = "/usr/lib/chromium/chromedriver"  # 套件 chromium-driver 安裝位置
+
+
+def _find_chrome_binary() -> str:
+    """回傳第一個存在的 Chromium 執行檔路徑，找不到就 raise。"""
+    for path in CHROME_CANDIDATES:
+        if Path(path).exists():
+            return path
+    raise FileNotFoundError(
+        "找不到 Chromium binary，請確認 packages.txt 已包含 'chromium'。"
+    )
+
 
 # -----------------------------------------------------------------------------
 # 共用工具
 # -----------------------------------------------------------------------------
 
-def _default_logger(msg: str) -> None:
+def _default_logger(msg: str) -> None:  # 預設直接 print
     print(msg)
 
 
 def _create_driver() -> webdriver.Chrome:
-    """建立 headless Chromium，雲端/本地皆可用。"""
+    """建立 headless Chrome，雲端/本地皆可用。"""
     opts = Options()
-    opts.binary_location = CHROMIUM_BINARY  # ★ 指定雲端 chromium
+    opts.binary_location = _find_chrome_binary()
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
 
-    return webdriver.Chrome(
-        service=Service(CHROMEDRIVER_PATH),
-        options=opts,
-    )
+    return webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=opts)
+
 
 # -----------------------------------------------------------------------------
 # 解析單本書詳情
@@ -85,6 +99,7 @@ def get_book_detail(driver: webdriver.Chrome, book_url: str) -> Dict[str, str]:
         "訂購數": detail.get("訂購數", ""),
     }
 
+
 # -----------------------------------------------------------------------------
 # 切換榜單 / 週期輔助
 # -----------------------------------------------------------------------------
@@ -110,6 +125,7 @@ def switch_rank(driver: webdriver.Chrome, period: str = "weekly") -> None:
     driver.execute_script(js)
     time.sleep(2)
 
+
 # -----------------------------------------------------------------------------
 # 爬取單張榜單
 # -----------------------------------------------------------------------------
@@ -124,6 +140,7 @@ def crawl_board(
     period_name: str,
     logger: Callable[[str], None],
 ) -> pd.DataFrame:
+    # 切榜 + 切週期
     switch_board_and_category(driver, kind, sub)
     switch_rank(driver, period)
 
@@ -153,19 +170,24 @@ def crawl_board(
                 "分類": sub_name,
                 "週期": period_name,
             }
-            base_info.update(get_book_detail(driver, book_url))
+            detail_info = get_book_detail(driver, book_url)
+            base_info.update(detail_info)
             data.append(base_info)
             logger(f"✔ 已完成：{base_info['書名']} ({kind_name}-{sub_name}-{period_name})")
 
     return pd.DataFrame(data)
 
+
 # -----------------------------------------------------------------------------
-# 對外主要入口
+# 對外主要入口 ── run_crawler()
 # -----------------------------------------------------------------------------
 
 def run_crawler(progress_callback: Optional[Callable[[str], None]] = None) -> str:
+    """執行完整爬蟲，並將過程訊息透過 callback 傳遞。"""
+
     logger = progress_callback or _default_logger
 
+    # ----------- 基本參數 -----------
     kinds = [("hits", "人氣榜"), ("bestsale", "訂購榜"), ("pearl", "珍珠榜")]
     categories = [("1", "愛情文藝"), ("2", "耽美"), ("10", "百合")]
     periods = [("weekly", "週榜"), ("monthly", "月榜")]
@@ -175,16 +197,19 @@ def run_crawler(progress_callback: Optional[Callable[[str], None]] = None) -> st
     for kind, kind_name in kinds:
         for sub, sub_name in categories:
             for period, period_name in periods:
-                sheet = f"{kind_name}-{sub_name}-{period_name}"
-                logger(f"▶ 開始爬取：{sheet}")
+                sheet_name = f"{kind_name}-{sub_name}-{period_name}"
+                logger(f"▶ 開始爬取：{sheet_name}")
 
                 driver = _create_driver()
                 try:
-                    df = crawl_board(driver, kind, kind_name, sub, sub_name, period, period_name, logger)
-                    dfs[sheet] = df
+                    df = crawl_board(
+                        driver, kind, kind_name, sub, sub_name, period, period_name, logger
+                    )
+                    dfs[sheet_name] = df
                 finally:
                     driver.quit()
 
+    # ----------- 輸出 Excel -----------
     today = datetime.now().strftime("%Y-%m-%d")
     filename = f"popo_排行榜_{today}.xlsx"
     with pd.ExcelWriter(filename, engine="openpyxl") as writer:
@@ -194,8 +219,9 @@ def run_crawler(progress_callback: Optional[Callable[[str], None]] = None) -> st
     logger(f"🎉 已完成並儲存：{filename}")
     return filename
 
+
 # -----------------------------------------------------------------------------
-# CLI
+# CLI 執行
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
