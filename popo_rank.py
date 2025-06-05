@@ -1,9 +1,9 @@
 """
-POPO 排行榜爬蟲  ‑ 自動偵測 Chromium 版
-------------------------------------------------
-• 改用系統 `chromium` + `chromium-driver`（packages.txt 安裝）。
-• 自動偵測可用的 Chromium 執行檔路徑，避免 NoSuchDriverException。
-• 保留 `progress_callback` 即時回報給 Streamlit UI。
+POPO 排行榜爬蟲  ‑ 使用 Selenium Manager 自動下載 chromedriver
+-----------------------------------------------------------------
+• 改為 **完全依賴 Selenium 4.20+ 內建的 driver manager**：
+  不再手動指定 chromedriver 路徑，也不需要 `chromium-driver` 套件。
+• 仍自動偵測 Chromium binary 路徑，避免 NoSuchDriverException。
 """
 
 from __future__ import annotations
@@ -17,49 +17,46 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 # -----------------------------------------------------------------------------
-# 系統安裝的 Chromium 路徑候選
-# -----------------------------------------------------------------------------
-CHROME_CANDIDATES: List[str] = [
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-    "/usr/lib/chromium/chromium",
-]
-CHROMEDRIVER_PATH = "/usr/lib/chromium/chromedriver"  # 套件 chromium-driver 安裝位置
-
-
-def _find_chrome_binary() -> str:
-    """回傳第一個存在的 Chromium 執行檔路徑，找不到就 raise。"""
-    for path in CHROME_CANDIDATES:
-        if Path(path).exists():
-            return path
-    raise FileNotFoundError(
-        "找不到 Chromium binary，請確認 packages.txt 已包含 'chromium'。"
-    )
-
-
-# -----------------------------------------------------------------------------
 # 共用工具
 # -----------------------------------------------------------------------------
 
-def _default_logger(msg: str) -> None:  # 預設直接 print
+CHROME_CANDIDATES: List[str] = [
+    "/usr/bin/chromium",  # Debian 常見 wrapper
+    "/usr/bin/chromium-browser",  # 舊命名
+    "/usr/lib/chromium/chromium",  # 實際 ELF
+]
+
+
+def _find_chrome_binary() -> str:
+    for p in CHROME_CANDIDATES:
+        if Path(p).exists():
+            return p
+    raise FileNotFoundError("找不到 Chromium，請確認 packages.txt 已安裝 chromium")
+
+
+def _default_logger(msg: str) -> None:
     print(msg)
 
 
+# -----------------------------------------------------------------------------
+# Selenium Driver
+# -----------------------------------------------------------------------------
+
 def _create_driver() -> webdriver.Chrome:
-    """建立 headless Chrome，雲端/本地皆可用。"""
     opts = Options()
     opts.binary_location = _find_chrome_binary()
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-gpu")
 
-    return webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=opts)
+    # 交給 Selenium Manager 自動下載並匹配版本
+    return webdriver.Chrome(options=opts)
 
 
 # -----------------------------------------------------------------------------
