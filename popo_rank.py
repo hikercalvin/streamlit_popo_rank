@@ -24,6 +24,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.utils import ChromeType
 
 # -----------------------------------------------------------------------------
 # 共用工具
@@ -43,8 +44,7 @@ def _create_driver() -> webdriver.Chrome:
 
     return webdriver.Chrome(
         service=Service(
-            ChromeDriverManager(chrome_type=ChromeType.CHROMIUM)  # ★ 指定 CHROMIUM
-            .install()
+            ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
         ),
         options=opts,
     )
