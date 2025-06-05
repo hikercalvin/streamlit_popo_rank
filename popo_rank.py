@@ -42,10 +42,12 @@ def _create_driver() -> webdriver.Chrome:
     opts.add_argument("--disable-dev-shm-usage")
 
     return webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
+        service=Service(
+            ChromeDriverManager(chrome_type=ChromeType.CHROMIUM)  # ★ 指定 CHROMIUM
+            .install()
+        ),
         options=opts,
     )
-
 # -----------------------------------------------------------------------------
 # 解析單本書詳情
 # -----------------------------------------------------------------------------
