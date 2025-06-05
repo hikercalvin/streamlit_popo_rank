@@ -36,7 +36,7 @@ def _default_logger(msg: str) -> None:  # 預設直接 print
 def _create_driver() -> webdriver.Chrome:
     """建立 headless Chrome，雲端/本地皆可用。"""
     opts = Options()
-    opts.binary_location = "/usr/bin/chromium-browser"  # ★新增：雲端容器的 chromium 路徑
+    opts.binary_location = "/usr/bin/chromium" # ★新增：雲端容器的 chromium 路徑
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
