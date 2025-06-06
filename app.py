@@ -23,12 +23,15 @@ status = st.empty()
 
 if st.button("開始爬取並生成 Excel"):
     with st.spinner("努力爬取中，請稍候……"):
-        # 將 status.write 作為 callback，讓爬蟲即時回傳進度
         file_path = run_crawler(progress_callback=status.write)
+
     st.success("完成！")
-    st.download_button(
-        label="下載 Excel",
-        data=open(file_path, "rb").read(),
-        file_name=Path(file_path).name,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+
+    # ✅ 最保險的寫法：確定檔案存在，讀出 bytes 給 download_button
+    with open(file_path, "rb") as f:
+        st.download_button(
+            label="下載 Excel",
+            data=f.read(),                      # 讀成 bytes
+            file_name=Path(file_path).name,     # 顯示檔名
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
